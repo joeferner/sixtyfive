@@ -1,0 +1,63 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'sixtyfive'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=sixtyfive",
+                    "--package=sixtyfive"
+                ],
+                "filter": {
+                    "name": "sixtyfive",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'sixtyfive d'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=sixtyfive",
+                    "--package=sixtyfive"
+                ],
+                "filter": {
+                    "name": "sixtyfive",
+                    "kind": "bin"
+                }
+            },
+            "args": ["d", "-l", "nes", "/home/jferner/Downloads/Donkey Kong (JU).nes"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'sixtyfive'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=sixtyfive",
+                    "--package=sixtyfive"
+                ],
+                "filter": {
+                    "name": "sixtyfive",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
