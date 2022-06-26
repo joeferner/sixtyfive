@@ -1,29 +1,47 @@
-use std::{collections::HashMap, fmt, iter::Map, path::PathBuf};
+use std::{collections::HashMap, fmt, path::PathBuf};
 
 use nom::{
-    branch::alt,
-    bytes::complete::{tag, tag_no_case, take, take_till},
-    character::complete::{alpha1, alphanumeric1, char, hex_digit1, multispace0, one_of, space0},
-    combinator::opt,
-    error::{context, ErrorKind, FromExternalError, ParseError, VerboseError},
-    multi::{count, many0, many1, many_m_n},
-    number::complete::hex_u32,
-    sequence::{preceded, separated_pair, terminated, tuple},
-    AsChar, Err as NomErr, IResult, InputTakeAtPosition,
+    character::complete::{alpha1, alphanumeric1, char, multispace0, space0},
+    error::{context, ErrorKind, FromExternalError, ParseError as NomParseError, VerboseError},
+    sequence::tuple,
+    AsChar, Err as NomErr, IResult, InputTakeAtPosition, Needed,
 };
-use nom_supreme::multi::parse_separated_terminated;
 use nom_supreme::ParserExt;
+use nom_supreme::{multi::parse_separated_terminated, tag::complete::tag};
 
 #[derive(Debug)]
 pub enum ReadLinkerFileError {
     MissingFile(PathBuf),
-    Invalid(),
     IoError(std::io::Error),
+    ParseError(VerboseError<String>),
+    ParseFailure(VerboseError<String>),
+    ParseIncomplete(Needed),
 }
 
 impl From<std::io::Error> for ReadLinkerFileError {
     fn from(err: std::io::Error) -> Self {
         return ReadLinkerFileError::IoError(err);
+    }
+}
+
+fn verbose_error_to_string(err: VerboseError<&str>) -> VerboseError<String> {
+    let mut result = VerboseError::from_error_kind(String::from(""), ErrorKind::Alpha);
+    result.errors.clear();
+    for err_item in err.errors {
+        result.errors.push((String::from(err_item.0), err_item.1));
+    }
+    return result;
+}
+
+impl From<nom::Err<VerboseError<&str>>> for ReadLinkerFileError {
+    fn from(err: NomErr<VerboseError<&str>>) -> Self {
+        return match err {
+            nom::Err::Error(err) => ReadLinkerFileError::ParseError(verbose_error_to_string(err)),
+            nom::Err::Failure(err) => {
+                ReadLinkerFileError::ParseFailure(verbose_error_to_string(err))
+            }
+            nom::Err::Incomplete(needed) => ReadLinkerFileError::ParseIncomplete(needed),
+        };
     }
 }
 
@@ -33,19 +51,25 @@ impl fmt::Display for ReadLinkerFileError {
             ReadLinkerFileError::MissingFile(path) => {
                 write!(f, "Missing linker file {}", path.display())
             }
-            ReadLinkerFileError::Invalid() => {
-                write!(f, "Invalid linker file")
-            }
             ReadLinkerFileError::IoError(err) => {
                 write!(f, "Read linker io error {}", err)
+            }
+            ReadLinkerFileError::ParseError(err) => {
+                write!(f, "Parse error {}", err)
+            }
+            ReadLinkerFileError::ParseFailure(err) => {
+                write!(f, "Parse failure {}", err)
+            }
+            ReadLinkerFileError::ParseIncomplete(needed) => {
+                write!(f, "Parse incomplete {:?}", needed)
             }
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Symbol {
-    symbolType: Option<String>,
+    symbol_type: Option<String>,
     value: Option<u32>,
 }
 
@@ -56,21 +80,21 @@ pub struct MemorySegment {
     size: Option<u32>,
     fill: Option<bool>,
     define: Option<bool>,
-    segmentType: Option<String>,
+    segment_type: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Segment {
     load: Option<String>,
-    segmentType: Option<String>,
+    segment_type: Option<String>,
     run: Option<String>,
     define: Option<bool>,
     optional: Option<bool>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Feature {
-    featureType: Option<String>,
+    feature_type: Option<String>,
     label: Option<String>,
     count: Option<String>,
     segment: Option<String>,
@@ -78,16 +102,27 @@ pub struct Feature {
 
 #[derive(Debug)]
 pub struct LinkerFile {
-    symbols: Option<Map<String, Symbol>>,
-    memory: Option<Map<String, MemorySegment>>,
-    segments: Option<Map<String, Segment>>,
-    features: Option<Map<String, Map<String, Feature>>>,
+    symbols: Option<HashMap<String, Symbol>>,
+    memory: Option<HashMap<String, MemorySegment>>,
+    segments: Option<HashMap<String, Segment>>,
+    features: Option<HashMap<String, HashMap<String, Feature>>>,
 }
 
-pub fn read_linker_file<'a>(linker_file: String) -> Result<LinkerFile, ReadLinkerFileError> {
+impl PartialEq for LinkerFile {
+    fn eq(&self, other: &Self) -> bool {
+        self.symbols == other.symbols
+            && self.memory == other.memory
+            && self.segments == other.segments
+            && self.features == other.features
+    }
+}
+
+pub fn read_linker_file(linker_file: String) -> Result<LinkerFile, ReadLinkerFileError> {
     if linker_file == "nes" {
         let str = include_str!("linker/nes.cfg");
-        return read_linker_bytes(str);
+        return read_linker_from_string(str)
+            .map_err(|err| ReadLinkerFileError::from(err))
+            .map(|res| res.1);
     }
 
     let file = PathBuf::from(linker_file);
@@ -96,20 +131,30 @@ pub fn read_linker_file<'a>(linker_file: String) -> Result<LinkerFile, ReadLinke
     }
 
     let str = std::fs::read_to_string(file.as_path())?;
-    return read_linker_bytes(str.as_str());
-}
-
-fn read_linker_bytes(str: &str) -> Result<LinkerFile, ReadLinkerFileError> {
-    let result = LinkerFile {
-        symbols: Option::None,
-        memory: Option::None,
-        segments: Option::None,
-        features: Option::None,
-    };
-    return Result::Err(ReadLinkerFileError::Invalid());
+    return read_linker_from_string(str.as_str())
+        .map_err(|err| ReadLinkerFileError::from(err))
+        .map(|res| res.1);
 }
 
 type Res<T, U> = IResult<T, U, VerboseError<T>>;
+
+#[rustfmt::skip]
+fn read_linker_from_string(input: &str) -> Res<&str, LinkerFile> {
+    return context(
+        "linker file",
+        memory
+    )(input).and_then(|(next_input, _res)| {
+        return Result::Ok((
+            next_input,
+            LinkerFile {
+                symbols: Option::None,
+                memory: Option::None,
+                segments: Option::None,
+                features: Option::None,
+            }
+        ));
+    });
+}
 
 fn parse_bool(opt_str: Option<&str>) -> Result<Option<bool>, NomErr<VerboseError<&str>>> {
     if let Option::Some(str) = opt_str {
@@ -150,35 +195,76 @@ fn parse_u32(opt_str: Option<&str>) -> Result<Option<u32>, NomErr<VerboseError<&
 }
 
 #[rustfmt::skip]
-fn memory_segment(input: &str) -> Res<&str, MemorySegment> {
+fn memory(input: &str) -> Res<&str, HashMap<String, MemorySegment>> {
     return context(
-        "memory segment",
-        parse_separated_terminated(
-            arg,
-            char(',').delimited_by(space0),
-            char(';').preceded_by(space0),
+        "memory",
+        tuple((
+          tag("MEMORY"),
+          multispace0,
+          char('{'),
+          multispace0,
+          parse_separated_terminated(
+            memory_segment,
+            char(';').delimited_by(space0),
+            char('}').preceded_by(space0),
             HashMap::new,
             |mut map, arg| {
                 map.insert(arg.0, arg.1);
                 map
             },
-        )
-    )(input).and_then(|(next_input, mut res)| {
+          ),
+        ))
+    )(input).and_then(|(next_input, res)| {
         return Result::Ok((
             next_input,
-            MemorySegment {
-                file: res.remove("file").and_then(|v| Option::Some(String::from(v))),
-                define: parse_bool(res.remove("define"))?,
-                fill: parse_bool(res.remove("fill"))?,
-                size: parse_u32(res.remove("size"))?,
-                start: parse_u32(res.remove("start"))?,
-                segmentType: res.remove("type").and_then(|v| Option::Some(String::from(v)))
-            }
+            res.4
         ));
     });
 }
 
-pub fn not_arg_end<T, E: ParseError<T>>(input: T) -> IResult<T, T, E>
+#[rustfmt::skip]
+fn memory_segment(input: &str) -> Res<&str, (String, MemorySegment)> {
+    return context(
+        "memory segment",
+        tuple((
+            alphanumeric1,
+            multispace0,
+            char(':'),
+            multispace0,
+            parse_separated_terminated(
+                arg,
+                char(',').delimited_by(space0),
+                char(';').preceded_by(space0),
+                HashMap::new,
+                |mut map, arg| {
+                    map.insert(arg.0, arg.1);
+                    map
+                },
+            )
+        ))        
+    )(input).and_then(|(next_input, res)| {
+        let mut memory_segment_map = res.4;
+        let memory_segment = MemorySegment {
+            file: memory_segment_map.remove("file").and_then(|v| Option::Some(String::from(v))),
+            define: parse_bool(memory_segment_map.remove("define"))?,
+            fill: parse_bool(memory_segment_map.remove("fill"))?,
+            size: parse_u32(memory_segment_map.remove("size"))?,
+            start: parse_u32(memory_segment_map.remove("start"))?,
+            segment_type: memory_segment_map.remove("type").and_then(|v| Option::Some(String::from(v)))
+        };
+        // TODO test res is empty
+        
+        return Result::Ok((
+            next_input,
+            (
+                String::from(res.0),
+                memory_segment
+            )
+        ));
+    });
+}
+
+pub fn not_arg_end<T, E: NomParseError<T>>(input: T) -> IResult<T, T, E>
 where
     T: InputTakeAtPosition,
     <T as InputTakeAtPosition>::Item: AsChar,
@@ -206,33 +292,6 @@ fn arg(input: &str) -> Res<&str, (&str, &str)> {
         .map(|(next_input, res)| (next_input, (res.0, res.4)));
 }
 
-#[rustfmt::skip]
-fn hex_number_u32(input: &str) -> Res<&str, u32> {
-    return context(
-        "hex number",
-         tuple((
-            tag("$"),
-            hex_digit1
-        )))(input)
-        .map(|(next_input, res)| (
-            next_input,
-            u32::from_str_radix(res.1,16).unwrap()
-        ));
-}
-
-// fn start_arg(input: &str) -> Res<&str, u32> {
-//     return context(
-//         "start arg",
-//          tuple((
-//             tag("start"),
-//             multispace0,
-//             tag("="),
-//             multispace0,
-//             hex_number_u32
-//         )))(input)
-//         .map(|(next_input, res)| (next_input, res));
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -242,19 +301,54 @@ mod tests {
     };
 
     #[test]
-    fn test_memory_segment() {
+    fn test_read_linker_from_string() {
+        let mut expected_memory = HashMap::new();
+        expected_memory.insert(
+            String::from("ZP"),
+            MemorySegment {
+                file: Option::Some(String::from("\"\"")),
+                start: Option::Some(0x0002),
+                size: Option::Some(0x1a),
+                fill: Option::None,
+                define: Option::Some(true),
+                segment_type: Option::Some(String::from("rw")),
+            },
+        );
         assert_eq!(
-            memory_segment("file = \"\", start = $0002, size = $001A, type = rw, define = yes;"),
+            read_linker_from_string(
+                "MEMORY { ZP: file = \"\", start = $0002, size = $001A, type = rw, define = yes; }"
+            ),
             Ok((
                 "",
-                MemorySegment {
-                    file: Option::Some(String::from("\"\"")),
-                    start: Option::Some(0x0002),
-                    size: Option::Some(0x1a),
-                    fill: Option::None,
-                    define: Option::Some(true),
-                    segmentType: Option::Some(String::from("rw"))
+                LinkerFile {
+                    symbols: Option::None,
+                    memory: Option::Some(expected_memory),
+                    features: Option::None,
+                    segments: Option::None,
                 }
+            ))
+        );
+    }
+
+    #[test]
+    fn test_memory_segment() {
+        assert_eq!(
+            memory_segment(
+                "ZP: file = \"\", start = $0002, size = $001A, type = rw, define = yes;"
+            ),
+            Ok((
+                "",
+                (
+                    String::from("ZP"),
+                    MemorySegment {
+                        file: Option::Some(String::from("\"\"")),
+                        start: Option::Some(0x0002),
+                        size: Option::Some(0x1a),
+                        fill: Option::None,
+                        define: Option::Some(true),
+                        segment_type: Option::Some(String::from("rw"))
+                    }
+                )
             ))
         );
     }
@@ -269,21 +363,6 @@ mod tests {
                 errors: vec![
                     (";", VerboseErrorKind::Nom(ErrorKind::TakeUntil)),
                     ("file=;", VerboseErrorKind::Context("arg")),
-                ]
-            }))
-        );
-    }
-
-    #[test]
-    fn test_hex_number_u32() {
-        assert_eq!(hex_number_u32("$0123"), Ok(("", 0x0123)));
-        assert_eq!(hex_number_u32("$abcd"), Ok(("", 0xabcd)));
-        assert_eq!(
-            hex_number_u32("$gggg"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    ("gggg", VerboseErrorKind::Nom(ErrorKind::HexDigit)),
-                    ("$gggg", VerboseErrorKind::Context("hex number")),
                 ]
             }))
         );
