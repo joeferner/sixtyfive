@@ -51,7 +51,7 @@ fn main() {
             if let Result::Err(err) = disassemble(DisassembleOptions {
                 linker_file,
                 in_file,
-                out,
+                out_file: out,
             }) {
                 eprintln!("Error disassembling: {}", err);
                 process::exit(1);

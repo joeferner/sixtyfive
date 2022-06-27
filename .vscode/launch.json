@@ -37,7 +37,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["d", "-l", "nes", "/home/jferner/Downloads/Donkey Kong (JU).nes"],
+            "args": ["d", "-l", "nes", "/home/jferner/Downloads/Donkey Kong (JU).nes", "--out", "/tmp/out.asm"],
             "cwd": "${workspaceFolder}"
         },
         {

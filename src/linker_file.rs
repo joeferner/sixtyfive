@@ -2,13 +2,13 @@ use std::{collections::HashMap, fmt, path::PathBuf};
 
 use nom::{
     character::complete::{alpha1, alphanumeric1, char, multispace0, space0},
-    error::{context, ErrorKind, FromExternalError, ParseError as NomParseError, VerboseError},
+    error::{context, ErrorKind, ParseError as NomParseError, VerboseError},
     multi::many0,
     sequence::tuple,
     AsChar, Err as NomErr, IResult, InputTakeAtPosition, Needed,
 };
+use nom_supreme::multi::parse_separated_terminated;
 use nom_supreme::ParserExt;
-use nom_supreme::{multi::parse_separated_terminated, tag::complete::tag};
 
 #[derive(Debug)]
 pub enum ReadLinkerFileError {
