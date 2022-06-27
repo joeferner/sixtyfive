@@ -2,10 +2,19 @@ use std::{
     fmt,
     fs::File,
     io::{BufReader, Read, Write},
+    mem,
     path::PathBuf,
 };
 
 use crate::linker_file::{read_linker_file, ReadLinkerFileError};
+
+// https://www.nesdev.org/wiki/NES_2.0
+// https://archive.nes.science/nesdev-forums/f2/t10469.xhtml
+// https://en.wikibooks.org/wiki/NES_Programming/Initializing_the_NES
+const NES_HEADER_LENGTH: usize = 16;
+const NES_PRG_ROM_PAGE_LENGTH: usize = 16 * 1024;
+const NES_CHR_ROM_PAGE_LENGTH: usize = 8 * 1024;
+const NES_PRG_ROM_START_ADDRESS: usize = 0x8000;
 
 #[derive(Debug)]
 pub struct DisassembleOptions {
@@ -42,6 +51,7 @@ impl fmt::Display for DisassembleError {
 #[derive(Debug)]
 enum AsmCode {
     DataHexU8(u8, Option<String>),
+    DataHexU16(u16, Option<String>),
     DataU8(u8, Option<String>),
     DataBinaryU8(u8, Option<String>),
     DataString(String, Option<String>),
@@ -67,6 +77,9 @@ impl fmt::Display for AsmCode {
             AsmCode::DataHexU8(v, comment) => {
                 write!(f, "{}", with_comment(format!(".byte ${:02X?}", v), comment))
             }
+            AsmCode::DataHexU16(v, comment) => {
+                write!(f, "{}", with_comment(format!(".byte ${:04X?}", v), comment))
+            }
             AsmCode::DataU8(v, comment) => {
                 write!(f, "{}", with_comment(format!(".byte {}", v), comment))
             }
@@ -89,7 +102,10 @@ impl fmt::Display for AsmCode {
                                     AsmCode::DataU8(v, _) => format!("{}", v),
                                     AsmCode::DataBinaryU8(v, _) => format!("{:#010b}", v),
                                     AsmCode::DataString(str, _) => format!("\"{}\"", str),
-                                    _ => panic!("data sequence can only contain data elements"),
+                                    v => panic!(
+                                        "data sequence can only contain data elements. found: {}",
+                                        v
+                                    ),
                                 })
                                 .collect::<Vec<String>>()
                                 .join(", ")
@@ -139,6 +155,58 @@ pub fn disassemble(opts: DisassembleOptions) -> Result<(), DisassembleError> {
 
     parse_nes_header(&mut asm_code)?;
 
+    let nmi_addr = (NES_HEADER_LENGTH + NES_PRG_ROM_PAGE_LENGTH - 6) as usize;
+    let nmi_l = asm_code[nmi_addr].to_u8()? as usize;
+    let nmi_h = (asm_code[nmi_addr + 1].to_u8()? as usize) << 8;
+    let nmi = nmi_l | nmi_h;
+    asm_code[nmi_addr] = AsmCode::DataHexU16(nmi as u16, Option::Some("NMI".to_string()));
+    asm_code[nmi_addr + 1] = AsmCode::Used;
+
+    let reset_addr = (NES_HEADER_LENGTH + NES_PRG_ROM_PAGE_LENGTH - 4) as usize;
+    let reset_l = asm_code[reset_addr].to_u8()? as usize;
+    let reset_h = (asm_code[reset_addr + 1].to_u8()? as usize) << 8;
+    let reset = reset_l | reset_h;
+    asm_code[reset_addr] = AsmCode::DataHexU16(reset as u16, Option::Some("RESET".to_string()));
+    asm_code[reset_addr + 1] = AsmCode::Used;
+
+    let irq_addr = (NES_HEADER_LENGTH + NES_PRG_ROM_PAGE_LENGTH - 2) as usize;
+    let irq_l = asm_code[irq_addr].to_u8()? as usize;
+    let irq_h = (asm_code[irq_addr + 1].to_u8()? as usize) << 8;
+    let irq = irq_l | irq_h;
+    asm_code[irq_addr] = AsmCode::DataHexU16(irq as u16, Option::Some("IRQ/BRK".to_string()));
+    asm_code[irq_addr + 1] = AsmCode::Used;
+
+    let chr_rom_start_addr = (NES_HEADER_LENGTH + NES_PRG_ROM_PAGE_LENGTH) as usize;
+    let chr_rom_end_addr = chr_rom_start_addr + NES_CHR_ROM_PAGE_LENGTH as usize;
+    let mut addr = chr_rom_start_addr;
+    while addr < chr_rom_end_addr {
+        let mut bytes = Vec::new();
+        for i in 0..16 {
+            let old_value = mem::replace(&mut asm_code[addr + i], AsmCode::Used);
+            bytes.push(old_value);
+        }
+        asm_code[addr] = AsmCode::DataSeq(bytes, Option::None);
+        addr += 16;
+    }
+
+    let mut addr = nmi - NES_PRG_ROM_START_ADDRESS + NES_HEADER_LENGTH;
+    if addr > NES_PRG_ROM_PAGE_LENGTH {
+        addr = addr - NES_PRG_ROM_PAGE_LENGTH;
+    }
+    disassemble_from(&mut asm_code, "nmi", addr)?;
+
+    let mut addr = reset - NES_PRG_ROM_START_ADDRESS + NES_HEADER_LENGTH;
+    if addr > NES_PRG_ROM_PAGE_LENGTH {
+        addr = addr - NES_PRG_ROM_PAGE_LENGTH;
+    }
+    disassemble_from(&mut asm_code, "reset", addr)?;
+
+    let mut addr = irq - NES_PRG_ROM_START_ADDRESS + NES_HEADER_LENGTH;
+    if addr > NES_PRG_ROM_PAGE_LENGTH {
+        addr = addr - NES_PRG_ROM_PAGE_LENGTH;
+    }
+    disassemble_from(&mut asm_code, "irq", addr)?;
+
     let mut out = open_out_file(opts.out_file)?;
     for c in asm_code {
         if let AsmCode::Used = c {
@@ -147,6 +215,12 @@ pub fn disassemble(opts: DisassembleOptions) -> Result<(), DisassembleError> {
         writeln!(out, "{}", c)?;
     }
 
+    return Result::Ok(());
+}
+
+fn disassemble_from(asm_code: &[AsmCode], name: &str, addr: usize) -> Result<(), DisassembleError> {
+    println!("{} -> 0x{:02x}", name, addr);
+    println!("{}", asm_code[addr]);
     return Result::Ok(());
 }
 
