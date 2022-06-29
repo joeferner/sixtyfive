@@ -51,47 +51,8 @@ impl NesDisassembler {
         };
 
         d.parse_header()?;
-
-        // let nmi_addr = (NES_HEADER_LENGTH + NES_PRG_ROM_PAGE_LENGTH - 6) as usize;
-        // let nmi_l = asm_code[nmi_addr].to_u8()? as usize;
-        // let nmi_h = (asm_code[nmi_addr + 1].to_u8()? as usize) << 8;
-        // let nmi = nmi_l | nmi_h;
-        // asm_code[nmi_addr] = AsmCode::DataHexU16(nmi as u16, Option::Some("NMI".to_string()));
-        // asm_code[nmi_addr + 1] = AsmCode::Used;
-
-        // let reset_addr = (NES_HEADER_LENGTH + NES_PRG_ROM_PAGE_LENGTH - 4) as usize;
-        // let reset_l = asm_code[reset_addr].to_u8()? as usize;
-        // let reset_h = (asm_code[reset_addr + 1].to_u8()? as usize) << 8;
-        // let reset = reset_l | reset_h;
-        // asm_code[reset_addr] = AsmCode::DataHexU16(reset as u16, Option::Some("RESET".to_string()));
-        // asm_code[reset_addr + 1] = AsmCode::Used;
-
-        // let irq_addr = (NES_HEADER_LENGTH + NES_PRG_ROM_PAGE_LENGTH - 2) as usize;
-        // let irq_l = asm_code[irq_addr].to_u8()? as usize;
-        // let irq_h = (asm_code[irq_addr + 1].to_u8()? as usize) << 8;
-        // let irq = irq_l | irq_h;
-        // asm_code[irq_addr] = AsmCode::DataHexU16(irq as u16, Option::Some("IRQ/BRK".to_string()));
-        // asm_code[irq_addr + 1] = AsmCode::Used;
-
         d.parse_chr_rom()?;
-
-        // let mut addr = nmi - NES_PRG_ROM_START_ADDRESS + NES_HEADER_LENGTH;
-        // if addr > NES_PRG_ROM_PAGE_LENGTH {
-        //     addr = addr - NES_PRG_ROM_PAGE_LENGTH;
-        // }
-        // disassemble_from(&mut asm_code, "nmi", addr)?;
-
-        // let mut addr = reset - NES_PRG_ROM_START_ADDRESS + NES_HEADER_LENGTH;
-        // if addr > NES_PRG_ROM_PAGE_LENGTH {
-        //     addr = addr - NES_PRG_ROM_PAGE_LENGTH;
-        // }
-        // disassemble_from(&mut asm_code, "reset", addr)?;
-
-        // let mut addr = irq - NES_PRG_ROM_START_ADDRESS + NES_HEADER_LENGTH;
-        // if addr > NES_PRG_ROM_PAGE_LENGTH {
-        //     addr = addr - NES_PRG_ROM_PAGE_LENGTH;
-        // }
-        // disassemble_from(&mut asm_code, "irq", addr)?;
+        d.disassemble_entry_points()?;
 
         d.d.code.write(out)?;
 
@@ -110,7 +71,7 @@ impl NesDisassembler {
                     AsmCode::DataString("NES".to_string()),
                     AsmCode::DataHexU8(0x1a),
                 ]),
-            );
+            )?;
         } else {
             return Result::Err(DisassembleError::ParseError(
                 "invalid nes header".to_string(),
@@ -251,12 +212,13 @@ impl NesDisassembler {
                     let old_value = self.d.code.take(addr + i)?;
                     bytes.push(old_value.asm_code);
                 }
-                // TODO create .neschrrom with values split out to visualize
+                // TODO create .neschr with values split out to visualize
                 self.d.code.set(
                     addr,
                     Statement {
                         asm_code: AsmCode::DataSeq(bytes),
                         comment: Option::None,
+                        label: Option::None,
                     },
                 )?;
                 addr += 16;
@@ -264,10 +226,44 @@ impl NesDisassembler {
         }
         return Result::Ok(());
     }
-}
 
-fn disassemble_from(asm_code: &[AsmCode], name: &str, addr: usize) -> Result<(), DisassembleError> {
-    println!("{} -> 0x{:02x}", name, addr);
-    println!("{}", asm_code[addr]);
-    return Result::Ok(());
+    fn disassemble_entry_points(&mut self) -> Result<(), DisassembleError> {
+        let mut addr = NES_HEADER_LENGTH;
+        for prg_rom_idx in 0..self.prg_rom_count {
+            let nmi = self.decode_vector(addr + NES_PRG_ROM_PAGE_LENGTH - 6, "NMI")?;
+            let reset = self.decode_vector(addr + NES_PRG_ROM_PAGE_LENGTH - 4, "RESET")?;
+            let irq = self.decode_vector(addr + NES_PRG_ROM_PAGE_LENGTH - 2, "IRQ")?;
+
+            let addr_map_fn = |addr: usize| {
+                let mut addr = addr - NES_PRG_ROM_START_ADDRESS + NES_HEADER_LENGTH;
+                // TODO I think this should only happen if prg rom pages are mirrored
+                if addr > NES_PRG_ROM_PAGE_LENGTH {
+                    addr = addr - NES_PRG_ROM_PAGE_LENGTH;
+                }
+                return addr as usize;
+            };
+
+            self.d
+                .disassemble(nmi, format!("nmi_{}", prg_rom_idx), addr_map_fn)?;
+            self.d
+                .disassemble(reset, format!("reset_{}", prg_rom_idx), addr_map_fn)?;
+            self.d
+                .disassemble(irq, format!("irq_{}", prg_rom_idx), addr_map_fn)?;
+
+            addr += NES_PRG_ROM_PAGE_LENGTH;
+        }
+
+        return Result::Ok(());
+    }
+
+    fn decode_vector(&mut self, offset: usize, name: &str) -> Result<usize, DisassembleError> {
+        let low = self.d.code.take(offset)?.asm_code.to_u8()? as u16;
+        let high = self.d.code.take(offset + 1)?.asm_code.to_u8()? as u16;
+        let addr = low | (high << 8);
+        self.d
+            .code
+            .replace(offset..offset + 2, AsmCode::DataHexU16(addr))?;
+        self.d.code.set_comment(offset, name);
+        return Result::Ok(addr as usize);
+    }
 }

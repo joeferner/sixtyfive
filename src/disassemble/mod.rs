@@ -21,6 +21,7 @@ pub enum DisassembleError {
     MissingFile(PathBuf),
     IoError(std::io::Error),
     ParseError(String),
+    UnhandledInstruction(u8),
 }
 
 impl From<std::io::Error> for DisassembleError {
@@ -35,6 +36,9 @@ impl fmt::Display for DisassembleError {
             DisassembleError::MissingFile(path) => write!(f, "Missing file {}", path.display()),
             DisassembleError::IoError(err) => write!(f, "io error: {}", err),
             DisassembleError::ParseError(err) => write!(f, "parse error: {}", err),
+            DisassembleError::UnhandledInstruction(v) => {
+                write!(f, "unhandled instruction: ${:02x}", v)
+            }
         }
     }
 }
