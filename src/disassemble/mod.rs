@@ -22,6 +22,7 @@ pub enum DisassembleError {
     IoError(std::io::Error),
     ParseError(String),
     UnhandledInstruction(u8),
+    WrappedError(String),
 }
 
 impl From<std::io::Error> for DisassembleError {
@@ -39,6 +40,7 @@ impl fmt::Display for DisassembleError {
             DisassembleError::UnhandledInstruction(v) => {
                 write!(f, "unhandled instruction: ${:02x}", v)
             }
+            DisassembleError::WrappedError(msg) => write!(f, "{}", msg),
         }
     }
 }

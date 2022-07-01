@@ -5,32 +5,38 @@ use crate::disassemble::DisassembleError;
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum Instruction {
-    JSR_ABS(String),
+    ASL_ZP(u8),
+    JSR_ABS(u16, String),
     AND_IMM(u8),
     PHA,
     STA_ZP(u8),
+    DEY,
     STA_ABS(u16),
     LDY_IMM(u8),
     LDA_ZP(u8),
     LDA_IMM(u8),
-    LDA_IND_Y(u8),
     LDX_ABS(u16),
+    LDA_IND_Y(u8),
+    CPY_IMM(u8),
     BNE_REL(String),
 }
 
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Instruction::JSR_ABS(v) => write!(f, "jsr {}", v),
+            Instruction::ASL_ZP(v) => write!(f, "asl ${:02x}", v),
+            Instruction::JSR_ABS(_addr, v) => write!(f, "jsr {}", v),
             Instruction::AND_IMM(v) => write!(f, "and #${:02x}", v),
             Instruction::PHA => write!(f, "pha"),
             Instruction::STA_ZP(v) => write!(f, "sta ${:02x}", v),
+            Instruction::DEY => write!(f, "dey"),
             Instruction::STA_ABS(v) => write!(f, "sta ${:04x}", v),
             Instruction::LDY_IMM(v) => write!(f, "ldy #${:02x}", v),
             Instruction::LDA_ZP(v) => write!(f, "lda ${:02x}", v),
             Instruction::LDA_IMM(v) => write!(f, "lda #${:02x}", v),
             Instruction::LDA_IND_Y(v) => write!(f, "lda (${:02x}),y", v),
             Instruction::LDX_ABS(v) => write!(f, "ldx ${:02x}", v),
+            Instruction::CPY_IMM(v) => write!(f, "cpy #${:02x}", v),
             Instruction::BNE_REL(v) => write!(f, "bne {}", v),
         }
     }
@@ -241,5 +247,12 @@ impl Code {
         } else {
             return first;
         }
+    }
+
+    pub fn is_used(&self, offset: usize) -> bool {
+        if let AsmCode::Used = self.stmts[offset].asm_code {
+            return true;
+        }
+        return false;
     }
 }

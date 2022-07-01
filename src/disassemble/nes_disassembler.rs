@@ -7,6 +7,7 @@ use super::{disassembler::Disassembler, DisassembleError};
 // https://www.nesdev.org/wiki/NES_2.0
 // https://archive.nes.science/nesdev-forums/f2/t10469.xhtml
 // https://en.wikibooks.org/wiki/NES_Programming/Initializing_the_NES
+// https://www.pagetable.com/c64ref/6502/
 const NES_HEADER_LENGTH: usize = 16;
 const NES_PRG_ROM_PAGE_LENGTH: usize = 16 * 1024;
 const NES_CHR_ROM_PAGE_LENGTH: usize = 8 * 1024;
@@ -228,14 +229,14 @@ impl NesDisassembler {
     }
 
     fn disassemble_entry_points(&mut self) -> Result<(), DisassembleError> {
-        let mut addr = NES_HEADER_LENGTH;
+        let mut offset = NES_HEADER_LENGTH;
         for prg_rom_idx in 0..self.prg_rom_count {
-            let nmi = self.decode_vector(addr + NES_PRG_ROM_PAGE_LENGTH - 6, "NMI")?;
-            let reset = self.decode_vector(addr + NES_PRG_ROM_PAGE_LENGTH - 4, "RESET")?;
-            let irq = self.decode_vector(addr + NES_PRG_ROM_PAGE_LENGTH - 2, "IRQ")?;
+            let nmi = self.decode_vector(offset + NES_PRG_ROM_PAGE_LENGTH - 6, "NMI")?;
+            let reset = self.decode_vector(offset + NES_PRG_ROM_PAGE_LENGTH - 4, "RESET")?;
+            let irq = self.decode_vector(offset + NES_PRG_ROM_PAGE_LENGTH - 2, "IRQ")?;
 
-            let addr_map_fn = |addr: usize| {
-                let mut addr = addr - NES_PRG_ROM_START_ADDRESS + NES_HEADER_LENGTH;
+            let addr_to_offset_fn = |a: u16| {
+                let mut addr = (a as usize) - NES_PRG_ROM_START_ADDRESS + NES_HEADER_LENGTH;
                 // TODO I think this should only happen if prg rom pages are mirrored
                 if addr > NES_PRG_ROM_PAGE_LENGTH {
                     addr = addr - NES_PRG_ROM_PAGE_LENGTH;
@@ -243,39 +244,39 @@ impl NesDisassembler {
                 return addr as usize;
             };
 
-            let addr_rev_map_fn = |addr: usize| {
-                return addr - NES_HEADER_LENGTH + 2177;
+            let offset_to_addr_fn = |offset: usize| {
+                return (offset - NES_HEADER_LENGTH + NES_PRG_ROM_START_ADDRESS) as u16;
             };
 
             self.d.disassemble(
                 nmi,
                 "nmi",
-                format!("page_{}", prg_rom_idx),
-                addr_map_fn,
-                addr_rev_map_fn,
+                format!("page_{}", prg_rom_idx).as_str(),
+                &addr_to_offset_fn,
+                &offset_to_addr_fn,
             )?;
             self.d.disassemble(
                 reset,
                 "reset",
-                format!("page_{}", prg_rom_idx),
-                addr_map_fn,
-                addr_rev_map_fn,
+                format!("page_{}", prg_rom_idx).as_str(),
+                &addr_to_offset_fn,
+                &offset_to_addr_fn,
             )?;
             self.d.disassemble(
                 irq,
                 "irq",
-                format!("page_{}", prg_rom_idx),
-                addr_map_fn,
-                addr_rev_map_fn,
+                format!("page_{}", prg_rom_idx).as_str(),
+                &addr_to_offset_fn,
+                &offset_to_addr_fn,
             )?;
 
-            addr += NES_PRG_ROM_PAGE_LENGTH;
+            offset += NES_PRG_ROM_PAGE_LENGTH;
         }
 
         return Result::Ok(());
     }
 
-    fn decode_vector(&mut self, offset: usize, name: &str) -> Result<usize, DisassembleError> {
+    fn decode_vector(&mut self, offset: usize, name: &str) -> Result<u16, DisassembleError> {
         let low = self.d.code.take(offset)?.asm_code.to_u8()? as u16;
         let high = self.d.code.take(offset + 1)?.asm_code.to_u8()? as u16;
         let addr = low | (high << 8);
@@ -283,6 +284,6 @@ impl NesDisassembler {
             .code
             .replace(offset..offset + 2, AsmCode::DataHexU16(addr))?;
         self.d.code.set_comment(offset, name);
-        return Result::Ok(addr as usize);
+        return Result::Ok(addr);
     }
 }

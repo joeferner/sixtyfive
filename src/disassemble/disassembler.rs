@@ -13,91 +13,147 @@ impl Disassembler {
         };
     }
 
-    pub fn disassemble<F1: Fn(usize) -> usize, F2: Fn(usize) -> usize>(
+    pub fn disassemble<F1: Fn(u16) -> usize, F2: Fn(usize) -> u16>(
         &mut self,
-        addr: usize,
+        addr: u16,
         name: &str,
-        label_prefix: String,
-        addr_map_fn: F1,
-        addr_rev_map_fn: F2,
+        label_prefix: &str,
+        addr_to_offset_fn: &F1,
+        offset_to_addr_fn: &F2,
     ) -> Result<(), DisassembleError> {
-        let mut addr = addr_map_fn(addr);
+        let mut offset = addr_to_offset_fn(addr);
         self.code
-            .set_label(addr, format!("{}_{}", label_prefix, name).as_str());
-        println!("{} -> 0x{:02x}", name, addr);
-        println!("{}", self.code.to_string(addr)?);
+            .set_label(offset, format!("{}_{}", label_prefix, name).as_str());
 
         loop {
-            let op = self.code.get_u8(addr)?;
-            match op {
+            if self.code.is_used(offset) {
+                break;
+            }
+
+            let op = self.code.get_u8(offset)?;
+            let result = match op {
+                // ASL ZP
+                0x06 => self.code.replace_with_instr(offset, 1, |args| {
+                    Result::Ok(Instruction::ASL_ZP(args[0].to_u8()?))
+                }),
+
                 // JSR ABS
                 0x20 => {
-                    let l = self.code.get_u8(addr + 1)? as u16;
-                    let h = self.code.get_u8(addr + 2)? as u16;
+                    let l = self.code.get_u8(offset + 1)? as u16;
+                    let h = self.code.get_u8(offset + 2)? as u16;
                     let jsr_addr = (h << 8) | l;
                     let label = format!("{}_{:04x}", label_prefix, jsr_addr);
-                    self.code.replace_with_instr(addr, 2, |_| {
-                        Result::Ok(Instruction::JSR_ABS(label.clone()))
-                    })?;
-                    addr = addr_map_fn(jsr_addr as usize);
-                    self.code.set_label(addr, label.as_str());
+                    let jsr_result = self.code.replace_with_instr(offset, 2, |_| {
+                        Result::Ok(Instruction::JSR_ABS(jsr_addr, label.clone()))
+                    });
+
+                    // disassemble jump address
+                    self.disassemble(
+                        jsr_addr,
+                        format!("{:04x}", jsr_addr).as_str(),
+                        label_prefix,
+                        addr_to_offset_fn,
+                        offset_to_addr_fn,
+                    )?;
+
+                    jsr_result
                 }
+
+                // AND IMM
+                0x29 => self.code.replace_with_instr(offset, 1, |args| {
+                    Result::Ok(Instruction::AND_IMM(args[0].to_u8()?))
+                }),
+
+                // PHA
+                0x48 => self
+                    .code
+                    .replace_with_instr(offset, 0, |_| Result::Ok(Instruction::PHA)),
+
+                // STA ZP
+                0x85 => self.code.replace_with_instr(offset, 1, |args| {
+                    Result::Ok(Instruction::STA_ZP(args[0].to_u8()?))
+                }),
+
+                // DEY
+                0x88 => self
+                    .code
+                    .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::DEY)),
+
+                // STA ABS
+                0x8d => self.code.replace_with_instr(offset, 2, |args| {
+                    Result::Ok(Instruction::STA_ABS(to_u16(&args[0], &args[1])?))
+                }),
+
+                // LDY IMM
+                0xa0 => self.code.replace_with_instr(offset, 1, |args| {
+                    Result::Ok(Instruction::LDY_IMM(args[0].to_u8()?))
+                }),
+
+                // LDA ZP
+                0xa5 => self.code.replace_with_instr(offset, 1, |args| {
+                    Result::Ok(Instruction::LDA_ZP(args[0].to_u8()?))
+                }),
+
+                // LDA IMM
+                0xa9 => self.code.replace_with_instr(offset, 1, |args| {
+                    Result::Ok(Instruction::LDA_IMM(args[0].to_u8()?))
+                }),
+
+                // LDX ABS
+                0xae => self.code.replace_with_instr(offset, 2, |args| {
+                    Result::Ok(Instruction::LDX_ABS(to_u16(&args[0], &args[1])?))
+                }),
+
+                // LDA IND Y
+                0xb1 => self.code.replace_with_instr(offset, 1, |args| {
+                    Result::Ok(Instruction::LDA_IND_Y(args[0].to_u8()?))
+                }),
+
+                // CPY IMM
+                0xc0 => self.code.replace_with_instr(offset, 1, |args| {
+                    Result::Ok(Instruction::CPY_IMM(args[0].to_u8()?))
+                }),
 
                 // BNE REL
                 0xd0 => {
-                    let rel = self.code.get_i8(addr + 1)?;
-                    let addr16 = addr_rev_map_fn(addr) as u16;
-                    let bne_addr = addr16.wrapping_add(rel as u16);
-                    println!(
-                        "------- 0x{:04x} + 0x{:02x} = 0x{:04x} (0x{:04x})",
-                        addr16,
-                        rel,
-                        bne_addr,
-                        0 // addr_map_fn(bne_addr as usize)
-                    );
+                    let rel = self.code.get_i8(offset)?;
+                    let bne_addr = addr.wrapping_add(rel as u16) + 2 - 8; // TODO where does the 8 come from
                     let label = format!("{}_{:04x}", label_prefix, bne_addr);
-                    self.code.replace_with_instr(addr, 1, |_| {
+                    let bne_result = self.code.replace_with_instr(offset, 1, |_| {
                         Result::Ok(Instruction::BNE_REL(label.clone()))
-                    })?;
-                    break;
+                    });
+
+                    // disassemble jump address
+                    self.disassemble(
+                        bne_addr,
+                        format!("{:04x}", bne_addr).as_str(),
+                        label_prefix,
+                        addr_to_offset_fn,
+                        offset_to_addr_fn,
+                    )?;
+
+                    bne_result
                 }
 
                 // Other
                 _ => {
-                    addr += match op {
-                        0x29 => self.code.replace_with_instr(addr, 1, |args| {
-                            Result::Ok(Instruction::AND_IMM(args[0].to_u8()?))
-                        })?,
-                        0x48 => self
-                            .code
-                            .replace_with_instr(addr, 0, |_| Result::Ok(Instruction::PHA))?,
-                        0x85 => self.code.replace_with_instr(addr, 1, |args| {
-                            Result::Ok(Instruction::STA_ZP(args[0].to_u8()?))
-                        })?,
-                        0x8d => self.code.replace_with_instr(addr, 2, |args| {
-                            Result::Ok(Instruction::STA_ABS(to_u16(&args[0], &args[1])?))
-                        })?,
-                        0xa0 => self.code.replace_with_instr(addr, 1, |args| {
-                            Result::Ok(Instruction::LDY_IMM(args[0].to_u8()?))
-                        })?,
-                        0xa5 => self.code.replace_with_instr(addr, 1, |args| {
-                            Result::Ok(Instruction::LDA_ZP(args[0].to_u8()?))
-                        })?,
-                        0xa9 => self.code.replace_with_instr(addr, 1, |args| {
-                            Result::Ok(Instruction::LDA_IMM(args[0].to_u8()?))
-                        })?,
-                        0xb1 => self.code.replace_with_instr(addr, 1, |args| {
-                            Result::Ok(Instruction::LDA_IND_Y(args[0].to_u8()?))
-                        })?,
-                        0xae => self.code.replace_with_instr(addr, 2, |args| {
-                            Result::Ok(Instruction::LDX_ABS(to_u16(&args[0], &args[1])?))
-                        })?,
-                        _ => {
-                            // TODO i => return Result::Err(DisassembleError::UnhandledInstruction(i))
-                            println!("unhandled: 0x{:02x}", op);
-                            break;
-                        }
-                    };
+                    // TODO i => return Result::Err(DisassembleError::UnhandledInstruction(i))
+                    println!("unhandled: 0x{:02x}", op);
+                    break;
+                }
+            };
+
+            match result {
+                Result::Ok(size) => {
+                    offset += size;
+                }
+                Result::Err(err) => {
+                    return Result::Err(DisassembleError::WrappedError(format!(
+                        "{} at offset ${:04x} (addr ${:04x})",
+                        err,
+                        offset,
+                        offset_to_addr_fn(offset)
+                    )));
                 }
             }
         }
