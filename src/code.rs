@@ -5,15 +5,33 @@ use crate::disassemble::DisassembleError;
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum Instruction {
+    JSR_ABS(String),
+    AND_IMM(u8),
     PHA,
+    STA_ZP(u8),
+    STA_ABS(u16),
+    LDY_IMM(u8),
     LDA_ZP(u8),
+    LDA_IMM(u8),
+    LDA_IND_Y(u8),
+    LDX_ABS(u16),
+    BNE_REL(String),
 }
 
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Instruction::JSR_ABS(v) => write!(f, "jsr {}", v),
+            Instruction::AND_IMM(v) => write!(f, "and #${:02x}", v),
             Instruction::PHA => write!(f, "pha"),
+            Instruction::STA_ZP(v) => write!(f, "sta ${:02x}", v),
+            Instruction::STA_ABS(v) => write!(f, "sta ${:04x}", v),
+            Instruction::LDY_IMM(v) => write!(f, "ldy #${:02x}", v),
             Instruction::LDA_ZP(v) => write!(f, "lda ${:02x}", v),
+            Instruction::LDA_IMM(v) => write!(f, "lda #${:02x}", v),
+            Instruction::LDA_IND_Y(v) => write!(f, "lda (${:02x}),y", v),
+            Instruction::LDX_ABS(v) => write!(f, "ldx ${:02x}", v),
+            Instruction::BNE_REL(v) => write!(f, "bne {}", v),
         }
     }
 }
@@ -87,8 +105,8 @@ impl AsmCode {
             AsmCode::DataU8(v) => Result::Ok(*v),
             AsmCode::DataBinaryU8(v) => Result::Ok(*v),
             _ => Result::Err(DisassembleError::ParseError(format!(
-                "unexpected asm code {}",
-                self
+                "unexpected asm code \"{:?}\" -> \"{}\"",
+                self, self
             ))),
         };
     }
@@ -143,6 +161,10 @@ impl Code {
         return self.stmts[offset].asm_code.to_u8();
     }
 
+    pub fn get_i8(&self, offset: usize) -> Result<i8, DisassembleError> {
+        return Result::Ok(self.get_u8(offset)? as i8);
+    }
+
     pub fn set(&mut self, offset: usize, stmt: Statement) -> Result<(), DisassembleError> {
         self.stmts[offset] = stmt;
         return Result::Ok(());
@@ -172,15 +194,15 @@ impl Code {
         return Result::Ok(result);
     }
 
-    pub fn replace_with_instr<F: Fn(Vec<AsmCode>) -> Result<Instruction, DisassembleError>>(
+    pub fn replace_with_instr<F: FnMut(Vec<AsmCode>) -> Result<Instruction, DisassembleError>>(
         &mut self,
         offset: usize,
         args_len: usize,
-        instr_fn: F,
+        mut instr_fn: F,
     ) -> Result<usize, DisassembleError> {
         let mut args = Vec::new();
-        for _ in 0..args_len {
-            args.push(self.take(offset + 1)?.asm_code);
+        for i in 0..args_len {
+            args.push(self.take(offset + i + 1)?.asm_code);
         }
         let instr = instr_fn(args)?;
         self.replace(offset..offset + args_len + 1, AsmCode::Instruction(instr))?;

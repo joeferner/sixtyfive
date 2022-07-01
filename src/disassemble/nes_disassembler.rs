@@ -243,12 +243,31 @@ impl NesDisassembler {
                 return addr as usize;
             };
 
-            self.d
-                .disassemble(nmi, format!("nmi_{}", prg_rom_idx), addr_map_fn)?;
-            self.d
-                .disassemble(reset, format!("reset_{}", prg_rom_idx), addr_map_fn)?;
-            self.d
-                .disassemble(irq, format!("irq_{}", prg_rom_idx), addr_map_fn)?;
+            let addr_rev_map_fn = |addr: usize| {
+                return addr - NES_HEADER_LENGTH + 2177;
+            };
+
+            self.d.disassemble(
+                nmi,
+                "nmi",
+                format!("page_{}", prg_rom_idx),
+                addr_map_fn,
+                addr_rev_map_fn,
+            )?;
+            self.d.disassemble(
+                reset,
+                "reset",
+                format!("page_{}", prg_rom_idx),
+                addr_map_fn,
+                addr_rev_map_fn,
+            )?;
+            self.d.disassemble(
+                irq,
+                "irq",
+                format!("page_{}", prg_rom_idx),
+                addr_map_fn,
+                addr_rev_map_fn,
+            )?;
 
             addr += NES_PRG_ROM_PAGE_LENGTH;
         }
