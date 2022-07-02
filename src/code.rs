@@ -6,38 +6,54 @@ use crate::disassemble::DisassembleError;
 #[allow(non_camel_case_types)]
 pub enum Instruction {
     ASL_ZP(u8),
+    ORA_IMM(u8),
+    ASL,
     JSR_ABS(u16, String),
     AND_IMM(u8),
     PHA,
+    LSR,
+    PLA,
     STA_ZP(u8),
     DEY,
     STA_ABS(u16),
+    BCC_REL(i8, String),
     LDY_IMM(u8),
     LDA_ZP(u8),
     LDA_IMM(u8),
+    TAX,
     LDX_ABS(u16),
+    BCS_REL(i8, String),
     LDA_IND_Y(u8),
     CPY_IMM(u8),
-    BNE_REL(String),
+    INY,
+    BNE_REL(i8, String),
 }
 
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Instruction::ASL_ZP(v) => write!(f, "asl ${:02x}", v),
+            Instruction::ORA_IMM(v) => write!(f, "ora #${:02x}", v),
+            Instruction::ASL => write!(f, "asl"),
             Instruction::JSR_ABS(_addr, v) => write!(f, "jsr {}", v),
             Instruction::AND_IMM(v) => write!(f, "and #${:02x}", v),
             Instruction::PHA => write!(f, "pha"),
+            Instruction::LSR => write!(f, "lsr"),
+            Instruction::PLA => write!(f, "pla"),
             Instruction::STA_ZP(v) => write!(f, "sta ${:02x}", v),
             Instruction::DEY => write!(f, "dey"),
             Instruction::STA_ABS(v) => write!(f, "sta ${:04x}", v),
+            Instruction::BCC_REL(_, v) => write!(f, "bcc {}", v),
             Instruction::LDY_IMM(v) => write!(f, "ldy #${:02x}", v),
             Instruction::LDA_ZP(v) => write!(f, "lda ${:02x}", v),
             Instruction::LDA_IMM(v) => write!(f, "lda #${:02x}", v),
+            Instruction::TAX => write!(f, "tax"),
             Instruction::LDA_IND_Y(v) => write!(f, "lda (${:02x}),y", v),
             Instruction::LDX_ABS(v) => write!(f, "ldx ${:02x}", v),
+            Instruction::BCS_REL(_, v) => write!(f, "bcs {}", v),
             Instruction::CPY_IMM(v) => write!(f, "cpy #${:02x}", v),
-            Instruction::BNE_REL(v) => write!(f, "bne {}", v),
+            Instruction::INY => write!(f, "iny"),
+            Instruction::BNE_REL(_, v) => write!(f, "bne {}", v),
         }
     }
 }
@@ -251,6 +267,13 @@ impl Code {
 
     pub fn is_used(&self, offset: usize) -> bool {
         if let AsmCode::Used = self.stmts[offset].asm_code {
+            return true;
+        }
+        return false;
+    }
+
+    pub fn is_instruction(&self, offset: usize) -> bool {
+        if let AsmCode::Instruction(_) = self.stmts[offset].asm_code {
             return true;
         }
         return false;
