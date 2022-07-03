@@ -27,7 +27,7 @@ impl Disassembler {
             .set_label(offset, format!("{}_{}", label_prefix, name).as_str());
 
         loop {
-            if self.code.is_used(offset) || self.code.is_instruction(offset) {
+            if self.code.is_instruction(offset) {
                 break;
             }
 
@@ -75,6 +75,11 @@ impl Disassembler {
                     Result::Ok(Instruction::AND_IMM(args[0].to_u8()?))
                 }),
 
+                // SEC
+                0x38 => self
+                    .code
+                    .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::SEC)),
+
                 // PHA
                 0x48 => self
                     .code
@@ -84,6 +89,11 @@ impl Disassembler {
                 0x4a => self
                     .code
                     .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::LSR)),
+
+                // ADC ZP
+                0x65 => self.code.replace_with_instr(offset, 1, |args| {
+                    Result::Ok(Instruction::ADC_ZP(args[0].to_u8()?))
+                }),
 
                 // PLA
                 0x68 => self
@@ -114,6 +124,11 @@ impl Disassembler {
                     offset_to_addr_fn,
                     &|rel, label| Instruction::BCC_REL(rel, label),
                 ),
+
+                // TYA
+                0x98 => self
+                    .code
+                    .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::TYA)),
 
                 // LDY IMM
                 0xa0 => self.code.replace_with_instr(offset, 1, |args| {
@@ -164,6 +179,11 @@ impl Disassembler {
                 0xc8 => self
                     .code
                     .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::INY)),
+
+                // DEX
+                0xca => self
+                    .code
+                    .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::DEX)),
 
                 // BNE REL
                 0xd0 => self.branch_relative(
