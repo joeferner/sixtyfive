@@ -33,6 +33,11 @@ impl Disassembler {
 
             let op = self.code.get_u8(offset)?;
             let result = match op {
+                // ORA ZP
+                0x05 => self.code.replace_with_instr(offset, 1, |args| {
+                    Result::Ok(Instruction::ORA_ZP(args[0].to_u8()?))
+                }),
+
                 // ASL ZP
                 0x06 => self.code.replace_with_instr(offset, 1, |args| {
                     Result::Ok(Instruction::ASL_ZP(args[0].to_u8()?))
@@ -75,6 +80,11 @@ impl Disassembler {
                     Result::Ok(Instruction::AND_IMM(args[0].to_u8()?))
                 }),
 
+                // ROL
+                0x2a => self
+                    .code
+                    .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::ROL)),
+
                 // SEC
                 0x38 => self
                     .code
@@ -89,6 +99,13 @@ impl Disassembler {
                 0x4a => self
                     .code
                     .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::LSR)),
+
+                // RTS
+                0x60 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::RTS))?;
+                    Result::Ok(0)
+                }
 
                 // ADC ZP
                 0x65 => self.code.replace_with_instr(offset, 1, |args| {
@@ -135,6 +152,11 @@ impl Disassembler {
                     Result::Ok(Instruction::LDY_IMM(args[0].to_u8()?))
                 }),
 
+                // LDX IMM
+                0xa2 => self.code.replace_with_instr(offset, 1, |args| {
+                    Result::Ok(Instruction::LDX_IMM(args[0].to_u8()?))
+                }),
+
                 // LDA ZP
                 0xa5 => self.code.replace_with_instr(offset, 1, |args| {
                     Result::Ok(Instruction::LDA_ZP(args[0].to_u8()?))
@@ -168,6 +190,11 @@ impl Disassembler {
                 // LDA IND Y
                 0xb1 => self.code.replace_with_instr(offset, 1, |args| {
                     Result::Ok(Instruction::LDA_IND_Y(args[0].to_u8()?))
+                }),
+
+                // LDA abs,x
+                0xbd => self.code.replace_with_instr(offset, 2, |args| {
+                    Result::Ok(Instruction::LDA_ABS_X(to_u16(&args[0], &args[1])?))
                 }),
 
                 // CPY IMM
@@ -205,6 +232,9 @@ impl Disassembler {
 
             match result {
                 Result::Ok(size) => {
+                    if size == 0 {
+                        break;
+                    }
                     offset += size;
                     addr += size as u16;
                 }
