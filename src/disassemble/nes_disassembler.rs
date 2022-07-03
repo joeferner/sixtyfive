@@ -50,6 +50,15 @@ impl NesDisassembler {
             misc_roms: 0,
             default_expansion_device: 0,
         };
+        d.d.code.set_variable("PPU_CTRL", 0x2000);
+        d.d.code.set_variable("PPU_MASK", 0x2001);
+        d.d.code.set_variable("PPU_STATUS", 0x2002);
+        d.d.code.set_variable("OAM_ADDR", 0x2003);
+        d.d.code.set_variable("OAM_DATA", 0x2004);
+        d.d.code.set_variable("PPU_SCROLL", 0x2005);
+        d.d.code.set_variable("PPU_ADDR", 0x2006);
+        d.d.code.set_variable("PPU_DATA", 0x2007);
+        d.d.code.set_variable("OAM_DMA", 0x4014);
 
         d.parse_header()?;
         d.parse_chr_rom()?;

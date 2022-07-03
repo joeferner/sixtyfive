@@ -1,4 +1,4 @@
-use std::{fmt, io::Write, mem};
+use std::{collections::HashMap, fmt, io::Write, mem};
 
 use crate::disassemble::DisassembleError;
 
@@ -35,33 +35,64 @@ pub enum Instruction {
 
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Instruction::ASL_ZP(v) => write!(f, "asl ${:02x}", v),
-            Instruction::ORA_IMM(v) => write!(f, "ora #${:02x}", v),
-            Instruction::ASL => write!(f, "asl"),
-            Instruction::JSR_ABS(_addr, v) => write!(f, "jsr {}", v),
-            Instruction::AND_IMM(v) => write!(f, "and #${:02x}", v),
-            Instruction::SEC => write!(f, "sec"),
-            Instruction::PHA => write!(f, "pha"),
-            Instruction::LSR => write!(f, "lsr"),
-            Instruction::ADC_ZP(v) => write!(f, "adc ${:02x}", v),
-            Instruction::PLA => write!(f, "pla"),
-            Instruction::STA_ZP(v) => write!(f, "sta ${:02x}", v),
-            Instruction::DEY => write!(f, "dey"),
-            Instruction::STA_ABS(v) => write!(f, "sta ${:04x}", v),
-            Instruction::BCC_REL(_, v) => write!(f, "bcc {}", v),
-            Instruction::TYA => write!(f, "tya"),
-            Instruction::LDY_IMM(v) => write!(f, "ldy #${:02x}", v),
-            Instruction::LDA_ZP(v) => write!(f, "lda ${:02x}", v),
-            Instruction::LDA_IMM(v) => write!(f, "lda #${:02x}", v),
-            Instruction::TAX => write!(f, "tax"),
-            Instruction::LDA_IND_Y(v) => write!(f, "lda (${:02x}),y", v),
-            Instruction::LDX_ABS(v) => write!(f, "ldx ${:02x}", v),
-            Instruction::BCS_REL(_, v) => write!(f, "bcs {}", v),
-            Instruction::CPY_IMM(v) => write!(f, "cpy #${:02x}", v),
-            Instruction::INY => write!(f, "iny"),
-            Instruction::DEX => write!(f, "dex"),
-            Instruction::BNE_REL(_, v) => write!(f, "bne {}", v),
+        return write!(f, "{}", self.to_write_string(&HashMap::new()));
+    }
+}
+
+impl Instruction {
+    pub fn to_write_string(&self, addr_to_variable: &HashMap<u16, String>) -> String {
+        return match self {
+            Instruction::ASL_ZP(v) => Instruction::to_write_string_zp("asl", v, addr_to_variable),
+            Instruction::ORA_IMM(v) => format!("ora #${:02x}", v),
+            Instruction::ASL => format!("asl"),
+            Instruction::JSR_ABS(_addr, v) => format!("jsr {}", v),
+            Instruction::AND_IMM(v) => format!("and #${:02x}", v),
+            Instruction::SEC => format!("sec"),
+            Instruction::PHA => format!("pha"),
+            Instruction::LSR => format!("lsr"),
+            Instruction::ADC_ZP(v) => Instruction::to_write_string_zp("adc", v, addr_to_variable),
+            Instruction::PLA => format!("pla"),
+            Instruction::STA_ZP(v) => Instruction::to_write_string_zp("sta", v, addr_to_variable),
+            Instruction::DEY => format!("dey"),
+            Instruction::STA_ABS(v) => Instruction::to_write_string_abs("sta", v, addr_to_variable),
+            Instruction::BCC_REL(_, v) => format!("bcc {}", v),
+            Instruction::TYA => format!("tya"),
+            Instruction::LDY_IMM(v) => format!("ldy #${:02x}", v),
+            Instruction::LDA_ZP(v) => Instruction::to_write_string_zp("lda", v, addr_to_variable),
+            Instruction::LDA_IMM(v) => format!("lda #${:02x}", v),
+            Instruction::TAX => format!("tax"),
+            Instruction::LDA_IND_Y(v) => format!("lda (${:02x}),y", v),
+            Instruction::LDX_ABS(v) => Instruction::to_write_string_abs("ldx", v, addr_to_variable),
+            Instruction::BCS_REL(_, v) => format!("bcs {}", v),
+            Instruction::CPY_IMM(v) => format!("cpy #${:02x}", v),
+            Instruction::INY => format!("iny"),
+            Instruction::DEX => format!("dex"),
+            Instruction::BNE_REL(_, v) => format!("bne {}", v),
+        };
+    }
+
+    fn to_write_string_zp(
+        instr: &str,
+        zp_addr: &u8,
+        addr_to_variable: &HashMap<u16, String>,
+    ) -> String {
+        let addr = *zp_addr as u16;
+        if let Option::Some(var) = addr_to_variable.get(&addr) {
+            return format!("{} {}", instr, var);
+        } else {
+            return format!("{} ${:02x}", instr, zp_addr);
+        }
+    }
+
+    fn to_write_string_abs(
+        instr: &str,
+        addr: &u16,
+        addr_to_variable: &HashMap<u16, String>,
+    ) -> String {
+        if let Option::Some(var) = addr_to_variable.get(&addr) {
+            return format!("{} {}", instr, var);
+        } else {
+            return format!("{} ${:02x}", instr, addr);
         }
     }
 }
@@ -80,44 +111,7 @@ pub enum AsmCode {
 
 impl fmt::Display for AsmCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AsmCode::DataHexU8(v) => {
-                write!(f, ".byte ${:02X?}", v)
-            }
-            AsmCode::DataHexU16(v) => {
-                write!(f, ".byte ${:04X?}", v)
-            }
-            AsmCode::DataU8(v) => {
-                write!(f, ".byte {}", v)
-            }
-            AsmCode::DataBinaryU8(v) => {
-                write!(f, ".byte {:#010b}", v)
-            }
-            AsmCode::DataString(str) => {
-                write!(f, ".byte \"{}\"", str)
-            }
-            AsmCode::DataSeq(v) => {
-                return write!(
-                    f,
-                     ".byte {}",
-                            v.iter()
-                                .map(|i| match i {
-                                    AsmCode::DataHexU8(v) => format!("${:02X?}", v),
-                                    AsmCode::DataU8(v) => format!("{}", v),
-                                    AsmCode::DataBinaryU8(v) => format!("{:#010b}", v),
-                                    AsmCode::DataString(str) => format!("\"{}\"", str),
-                                    v => panic!(
-                                        "data sequence can only contain data elements. found: {}",
-                                        v
-                                    ),
-                                })
-                                .collect::<Vec<String>>()
-                                .join(", ")
-                );
-            }
-            AsmCode::Instruction(instr) => write!(f, "    {}", instr),
-            AsmCode::Used => write!(f, ""),
-        }
+        return write!(f, "{}", self.to_write_string(&HashMap::new()));
     }
 }
 
@@ -140,6 +134,48 @@ impl AsmCode {
             ))),
         };
     }
+
+    pub fn to_write_string(&self, addr_to_variable: &HashMap<u16, String>) -> String {
+        return match self {
+            AsmCode::DataHexU8(v) => {
+                format!(".byte ${:02X?}", v)
+            }
+            AsmCode::DataHexU16(v) => {
+                format!(".byte ${:04X?}", v)
+            }
+            AsmCode::DataU8(v) => {
+                format!(".byte {}", v)
+            }
+            AsmCode::DataBinaryU8(v) => {
+                format!(".byte {:#010b}", v)
+            }
+            AsmCode::DataString(str) => {
+                format!(".byte \"{}\"", str)
+            }
+            AsmCode::DataSeq(v) => {
+                return format!(
+                     ".byte {}",
+                            v.iter()
+                                .map(|i| match i {
+                                    AsmCode::DataHexU8(v) => format!("${:02X?}", v),
+                                    AsmCode::DataU8(v) => format!("{}", v),
+                                    AsmCode::DataBinaryU8(v) => format!("{:#010b}", v),
+                                    AsmCode::DataString(str) => format!("\"{}\"", str),
+                                    v => panic!(
+                                        "data sequence can only contain data elements. found: {}",
+                                        v
+                                    ),
+                                })
+                                .collect::<Vec<String>>()
+                                .join(", ")
+                );
+            }
+            AsmCode::Instruction(instr) => {
+                format!("    {}", instr.to_write_string(addr_to_variable))
+            }
+            AsmCode::Used => format!(""),
+        };
+    }
 }
 
 pub struct Statement {
@@ -150,6 +186,7 @@ pub struct Statement {
 
 pub struct Code {
     stmts: Vec<Statement>,
+    addr_to_variable: HashMap<u16, String>,
 }
 
 impl Code {
@@ -163,7 +200,14 @@ impl Code {
             });
         }
 
-        return Code { stmts };
+        return Code {
+            stmts,
+            addr_to_variable: HashMap::new(),
+        };
+    }
+
+    pub fn set_variable(&mut self, name: &str, addr: u16) {
+        self.addr_to_variable.insert(addr, name.to_string());
     }
 
     pub fn is_eq_u8(&self, offset: usize, d: u8) -> bool {
@@ -255,7 +299,7 @@ impl Code {
             if let Option::Some(label) = &c.label {
                 writeln!(out, "{}:", label)?;
             }
-            let asm = format!("{}", c.asm_code);
+            let asm = c.asm_code.to_write_string(&self.addr_to_variable);
             writeln!(out, "{}", Code::with_comment(asm, &c.comment))?;
         }
         return Result::Ok(());
