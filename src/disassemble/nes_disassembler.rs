@@ -58,7 +58,30 @@ impl NesDisassembler {
         d.d.code.set_variable("PPU_SCROLL", 0x2005);
         d.d.code.set_variable("PPU_ADDR", 0x2006);
         d.d.code.set_variable("PPU_DATA", 0x2007);
+
+        d.d.code.set_variable("APU_PULSE_1_ENV", 0x4000);
+        d.d.code.set_variable("APU_PULSE_1_SWEEP", 0x4001);
+        d.d.code.set_variable("APU_PULSE_1_TIMER", 0x4002);
+        d.d.code.set_variable("APU_PULSE_1_LEN", 0x4003);
+        d.d.code.set_variable("APU_PULSE_2_ENV", 0x4004);
+        d.d.code.set_variable("APU_PULSE_2_SWEEP", 0x4005);
+        d.d.code.set_variable("APU_PULSE_2_TIMER", 0x4006);
+        d.d.code.set_variable("APU_PULSE_2_LEN", 0x4007);
+        d.d.code.set_variable("APU_TRIANGLE_LEN_CR", 0x4008);
+        d.d.code.set_variable("APU_TRIANGLE_UNUSED", 0x4009);
+        d.d.code.set_variable("APU_TRIANGLE_TIMER", 0x400a);
+        d.d.code.set_variable("APU_TRIANGLE_LOAD", 0x400b);
+        d.d.code.set_variable("APU_NOISE_ENV", 0x400c);
+        d.d.code.set_variable("APU_NOISE_UNUSED", 0x400d);
+        d.d.code.set_variable("APU_NOISE_LP", 0x400e);
+        d.d.code.set_variable("APU_NOISE_LOAD", 0x400f);
+        d.d.code.set_variable("APU_DMC_IL__RRRR", 0x4010);
+        d.d.code.set_variable("APU_DMC_LOAD", 0x4011);
+        d.d.code.set_variable("APU_DMC_SAMPLE_ADDR", 0x4012);
+        d.d.code.set_variable("APU_DMC_SAMPLE_LEN", 0x4013);
         d.d.code.set_variable("OAM_DMA", 0x4014);
+        d.d.code.set_variable("APU_CH_ENABLE_STATUS", 0x4015);
+        d.d.code.set_variable("APU_ALL_FRAME_COUNTER", 0x4017);
 
         d.parse_header()?;
         d.parse_chr_rom()?;
