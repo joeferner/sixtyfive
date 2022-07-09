@@ -7,26 +7,34 @@ use crate::disassemble::DisassembleError;
 pub enum Instruction {
     ORA_ZP(u8),
     ASL_ZP(u8),
+    PHP,
     ORA_IMM(u8),
     ASL,
     BPL_REL(i8, String),
     CLC,
     JSR_ABS(u16, String),
     BIT_ZP(u8),
+    AND_ZP(u8),
+    PLP,
     AND_IMM(u8),
     ROL,
+    BMI_REL(i8, String),
     AND_ZP_X(u8),
     SEC,
+    RTI,
+    LSR_ZP(u8),
     PHA,
     EOR_IMM(u8),
     LSR,
     JMP_ABS(u16, String),
+    EOR_ABS(u16),
     RTS,
     ADC_ZP(u8),
     PLA,
     ADC_IMM(u8),
     ROR,
     ADC_ABS(u16),
+    ADC_ABS_X(u16),
     STY_ZP(u8),
     STA_ZP(u8),
     STX_ZP(u8),
@@ -36,8 +44,10 @@ pub enum Instruction {
     STA_ABS(u16),
     STX_ABS(u16),
     BCC_REL(i8, String),
+    STA_IND_Y(u8),
     STA_ZP_X(u8),
     TYA,
+    STA_ABS_Y(u16),
     STA_ABS_X(u16),
     LDY_IMM(u8),
     LDX_IMM(u8),
@@ -53,18 +63,28 @@ pub enum Instruction {
     BCS_REL(i8, String),
     LDA_IND_Y(u8),
     LDY_ZP_X(u8),
+    LDA_ZP_X(u8),
     LDA_ABS_Y(u16),
     LDY_ABS_X(u16),
     LDA_ABS_X(u16),
     CPY_IMM(u8),
+    CMP_ZP(u8),
     DEC_ZP(u8),
     INY,
     CMP_IMM(u8),
     DEX,
     DEC_ABS(u16),
     BNE_REL(i8, String),
+    DEC_ZP_X(u8),
+    CLD,
+    CMP_ABS_Y(u16),
+    CMP_ABS_X(u16),
+    CPX_IMM(u8),
+    SBC_ZP(u8),
     INC_ZP(u8),
     INX,
+    SBC_IMM(u8),
+    INC_ABS(u16),
     BEQ_REL(i8, String),
 }
 
@@ -79,28 +99,38 @@ impl Instruction {
         return match self {
             Instruction::ORA_ZP(v) => Instruction::to_write_string_zp("ora", v, addr_to_variable),
             Instruction::ASL_ZP(v) => Instruction::to_write_string_zp("asl", v, addr_to_variable),
+            Instruction::PHP => format!("php"),
             Instruction::ORA_IMM(v) => format!("ora #${:02x}", v),
             Instruction::ASL => format!("asl"),
             Instruction::BPL_REL(_, v) => format!("bpl {}", v),
             Instruction::CLC => format!("clc"),
             Instruction::JSR_ABS(_addr, v) => format!("jsr {}", v),
             Instruction::BIT_ZP(v) => Instruction::to_write_string_zp("bit", v, addr_to_variable),
+            Instruction::AND_ZP(v) => Instruction::to_write_string_zp("and", v, addr_to_variable),
+            Instruction::PLP => format!("plp"),
             Instruction::AND_IMM(v) => format!("and #${:02x}", v),
             Instruction::ROL => format!("rol"),
+            Instruction::BMI_REL(_, v) => format!("bmi {}", v),
             Instruction::AND_ZP_X(v) => {
                 Instruction::to_write_string_zp_x("and", v, addr_to_variable)
             }
             Instruction::SEC => format!("sec"),
+            Instruction::RTI => format!("rti"),
+            Instruction::LSR_ZP(v) => Instruction::to_write_string_zp("lsr", v, addr_to_variable),
             Instruction::PHA => format!("pha"),
             Instruction::EOR_IMM(v) => format!("eor #${:02x}", v),
             Instruction::LSR => format!("lsr"),
             Instruction::JMP_ABS(_addr, v) => format!("jmp {}", v),
+            Instruction::EOR_ABS(v) => Instruction::to_write_string_abs("eor", v, addr_to_variable),
             Instruction::RTS => format!("rts"),
             Instruction::ADC_ZP(v) => Instruction::to_write_string_zp("adc", v, addr_to_variable),
             Instruction::PLA => format!("pla"),
             Instruction::ADC_IMM(v) => format!("adc #${:02x}", v),
             Instruction::ROR => format!("ror"),
             Instruction::ADC_ABS(v) => Instruction::to_write_string_abs("adc", v, addr_to_variable),
+            Instruction::ADC_ABS_X(v) => {
+                Instruction::to_write_string_abs_x("adc", v, addr_to_variable)
+            }
             Instruction::STY_ZP(v) => Instruction::to_write_string_zp("sty", v, addr_to_variable),
             Instruction::STA_ZP(v) => Instruction::to_write_string_zp("sta", v, addr_to_variable),
             Instruction::STX_ZP(v) => Instruction::to_write_string_zp("stx", v, addr_to_variable),
@@ -110,10 +140,14 @@ impl Instruction {
             Instruction::STA_ABS(v) => Instruction::to_write_string_abs("sta", v, addr_to_variable),
             Instruction::STX_ABS(v) => Instruction::to_write_string_abs("stx", v, addr_to_variable),
             Instruction::BCC_REL(_, v) => format!("bcc {}", v),
+            Instruction::STA_IND_Y(v) => format!("sta (${:02x}),y", v),
             Instruction::STA_ZP_X(v) => {
                 Instruction::to_write_string_zp_x("sta", v, addr_to_variable)
             }
             Instruction::TYA => format!("tya"),
+            Instruction::STA_ABS_Y(v) => {
+                Instruction::to_write_string_abs_y("sta", v, addr_to_variable)
+            }
             Instruction::STA_ABS_X(v) => {
                 Instruction::to_write_string_abs_x("sta", v, addr_to_variable)
             }
@@ -129,6 +163,9 @@ impl Instruction {
             Instruction::LDY_ZP_X(v) => {
                 Instruction::to_write_string_zp_x("ldy", v, addr_to_variable)
             }
+            Instruction::LDA_ZP_X(v) => {
+                Instruction::to_write_string_zp_x("lda", v, addr_to_variable)
+            }
             Instruction::LDA_ABS_Y(v) => {
                 Instruction::to_write_string_abs_y("lda", v, addr_to_variable)
             }
@@ -143,14 +180,29 @@ impl Instruction {
             Instruction::LDX_ABS(v) => Instruction::to_write_string_abs("ldx", v, addr_to_variable),
             Instruction::BCS_REL(_, v) => format!("bcs {}", v),
             Instruction::CPY_IMM(v) => format!("cpy #${:02x}", v),
+            Instruction::CMP_ZP(v) => Instruction::to_write_string_zp("cmp", v, addr_to_variable),
             Instruction::DEC_ZP(v) => Instruction::to_write_string_zp("dec", v, addr_to_variable),
             Instruction::INY => format!("iny"),
             Instruction::CMP_IMM(v) => format!("cmp #${:02x}", v),
             Instruction::DEX => format!("dex"),
             Instruction::DEC_ABS(v) => Instruction::to_write_string_abs("dec", v, addr_to_variable),
             Instruction::BNE_REL(_, v) => format!("bne {}", v),
+            Instruction::DEC_ZP_X(v) => {
+                Instruction::to_write_string_zp_x("dec", v, addr_to_variable)
+            }
+            Instruction::CLD => format!("cld"),
+            Instruction::CMP_ABS_Y(v) => {
+                Instruction::to_write_string_abs_y("cmp", v, addr_to_variable)
+            }
+            Instruction::CMP_ABS_X(v) => {
+                Instruction::to_write_string_abs_x("cmp", v, addr_to_variable)
+            }
+            Instruction::CPX_IMM(v) => format!("cpx #${:02x}", v),
+            Instruction::SBC_ZP(v) => Instruction::to_write_string_zp("sbc", v, addr_to_variable),
             Instruction::INC_ZP(v) => Instruction::to_write_string_zp("inc", v, addr_to_variable),
             Instruction::INX => format!("inx"),
+            Instruction::SBC_IMM(v) => format!("sbc #${:02x}", v),
+            Instruction::INC_ABS(v) => Instruction::to_write_string_abs("inc", v, addr_to_variable),
             Instruction::BEQ_REL(_, v) => format!("beq {}", v),
         };
     }
@@ -189,7 +241,7 @@ impl Instruction {
         if let Option::Some(var) = addr_to_variable.get(&addr) {
             return format!("{} {}", instr, var);
         } else {
-            return format!("{} ${:02x}", instr, addr);
+            return format!("{} ${:04x}", instr, addr);
         }
     }
 
@@ -201,7 +253,7 @@ impl Instruction {
         if let Option::Some(var) = addr_to_variable.get(&addr) {
             return format!("{} {}", instr, var);
         } else {
-            return format!("{} ${:02x},x", instr, addr);
+            return format!("{} ${:04x},x", instr, addr);
         }
     }
 
@@ -213,7 +265,7 @@ impl Instruction {
         if let Option::Some(var) = addr_to_variable.get(&addr) {
             return format!("{} {}", instr, var);
         } else {
-            return format!("{} ${:02x},y", instr, addr);
+            return format!("{} ${:04x},y", instr, addr);
         }
     }
 }
