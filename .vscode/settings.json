@@ -1,8 +1,10 @@
 {
     "cSpell.words": [
         "CCCCPPPP",
+        "CHRROM",
         "Dendy",
         "eeprom",
+        "itertools",
         "MMMMPPPP",
         "multispace",
         "nametable",
@@ -11,6 +13,7 @@
         "NTSC",
         "NVRAM",
         "Playchoice",
+        "PRGROM",
         "rustfmt",
         "sixtyfive",
         "SSSSNNNN",

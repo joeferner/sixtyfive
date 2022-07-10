@@ -1,6 +1,4 @@
-use crate::code::{AsmCode, Code, Instruction};
-
-use super::DisassembleError;
+use super::{DisassembleError, code::{Code, AsmCode}, instruction::Instruction};
 
 pub struct Disassembler {
     pub code: Code,
@@ -34,6 +32,13 @@ impl Disassembler {
 
             let op = self.code.get_u8(offset)?;
             let result = match op {
+                // JAM
+                0x02 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
+                    Result::Ok(0)
+                }
+                
                 // ORA ZP
                 0x05 => self.code.replace_with_instr(offset, 1, |args| {
                     Result::Ok(Instruction::ORA_ZP(args[0].to_u8()?))
@@ -69,6 +74,13 @@ impl Disassembler {
                     &|rel, label| Instruction::BPL_REL(rel, label),
                 ),
 
+                // JAM
+                0x12 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
+                    Result::Ok(0)
+                }
+
                 // CLC
                 0x18 => self
                     .code
@@ -94,6 +106,13 @@ impl Disassembler {
                     )?;
 
                     jsr_result
+                }
+
+                // JAM
+                0x22 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
+                    Result::Ok(0)
                 }
 
                 // BIT ZP
@@ -131,6 +150,13 @@ impl Disassembler {
                     &|rel, label| Instruction::BMI_REL(rel, label),
                 ),
 
+                // JAM
+                0x32 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
+                    Result::Ok(0)
+                }
+
                 // AND ZP,x
                 0x35 => self.code.replace_with_instr(offset, 1, |args| {
                     Result::Ok(Instruction::AND_ZP_X(args[0].to_u8()?))
@@ -145,6 +171,13 @@ impl Disassembler {
                 0x40 => {
                     self.code
                         .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::RTI))?;
+                    Result::Ok(0)
+                }
+
+                // JAM
+                0x42 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
                     Result::Ok(0)
                 }
 
@@ -192,10 +225,24 @@ impl Disassembler {
                     Result::Ok(Instruction::EOR_ABS(to_u16(&args[0], &args[1])?))
                 }),
 
+                // JAM
+                0x52 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
+                    Result::Ok(0)
+                }
+
                 // RTS
                 0x60 => {
                     self.code
                         .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::RTS))?;
+                    Result::Ok(0)
+                }
+
+                // JAM
+                0x62 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
                     Result::Ok(0)
                 }
 
@@ -228,6 +275,13 @@ impl Disassembler {
                 0x6d => self.code.replace_with_instr(offset, 2, |args| {
                     Result::Ok(Instruction::ADC_ABS(to_u16(&args[0], &args[1])?))
                 }),
+
+                // JAM
+                0x72 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
+                    Result::Ok(0)
+                }
 
                 // SEI
                 0x78 => self
@@ -293,6 +347,13 @@ impl Disassembler {
                 0x91 => self.code.replace_with_instr(offset, 1, |args| {
                     Result::Ok(Instruction::STA_IND_Y(args[0].to_u8()?))
                 }),
+
+                // JAM
+                0x92 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
+                    Result::Ok(0)
+                }
 
                 // STY ZP,x
                 0x94 => self.code.replace_with_instr(offset, 1, |args| {
@@ -394,6 +455,13 @@ impl Disassembler {
                     Result::Ok(Instruction::LDA_IND_Y(args[0].to_u8()?))
                 }),
 
+                // JAM
+                0xb2 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
+                    Result::Ok(0)
+                }
+
                 // LDY ZP,x
                 0xb4 => self.code.replace_with_instr(offset, 1, |args| {
                     Result::Ok(Instruction::LDY_ZP_X(args[0].to_u8()?))
@@ -479,6 +547,13 @@ impl Disassembler {
                     &|rel, label| Instruction::BNE_REL(rel, label),
                 ),
 
+                // JAM
+                0xd2 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
+                    Result::Ok(0)
+                }
+
                 // CMP ZP,x
                 0xd5 => self.code.replace_with_instr(offset, 1, |args| {
                     Result::Ok(Instruction::CMP_ZP_X(args[0].to_u8()?))
@@ -553,6 +628,13 @@ impl Disassembler {
                     offset_to_addr_fn,
                     &|rel, label| Instruction::BEQ_REL(rel, label),
                 ),
+
+                // JAM
+                0xf2 => {
+                    self.code
+                        .replace_with_instr(offset, 0, |_args| Result::Ok(Instruction::JAM))?;
+                    Result::Ok(0)
+                }
 
                 // INC ZP,x
                 0xf6 => self.code.replace_with_instr(offset, 1, |args| {

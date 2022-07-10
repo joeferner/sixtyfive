@@ -1,5 +1,8 @@
 mod disassembler;
 mod nes_disassembler;
+mod code;
+mod variable;
+mod instruction;
 
 use std::{
     fmt,

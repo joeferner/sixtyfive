@@ -1,8 +1,10 @@
 use std::io::Write;
 
-use crate::code::{AsmCode, Statement};
-
-use super::{disassembler::Disassembler, DisassembleError};
+use super::{
+    disassembler::Disassembler,
+    variable::{Variable, VariableValue},
+    DisassembleError, code::{AsmCode, Statement},
+};
 
 // https://www.nesdev.org/wiki/NES_2.0
 // https://archive.nes.science/nesdev-forums/f2/t10469.xhtml
@@ -50,39 +52,8 @@ impl NesDisassembler {
             misc_roms: 0,
             default_expansion_device: 0,
         };
-        d.d.code.set_variable("PPU_CTRL", 0x2000);
-        d.d.code.set_variable("PPU_MASK", 0x2001);
-        d.d.code.set_variable("PPU_STATUS", 0x2002);
-        d.d.code.set_variable("OAM_ADDR", 0x2003);
-        d.d.code.set_variable("OAM_DATA", 0x2004);
-        d.d.code.set_variable("PPU_SCROLL", 0x2005);
-        d.d.code.set_variable("PPU_ADDR", 0x2006);
-        d.d.code.set_variable("PPU_DATA", 0x2007);
 
-        d.d.code.set_variable("APU_PULSE_1_ENV", 0x4000);
-        d.d.code.set_variable("APU_PULSE_1_SWEEP", 0x4001);
-        d.d.code.set_variable("APU_PULSE_1_TIMER", 0x4002);
-        d.d.code.set_variable("APU_PULSE_1_LEN", 0x4003);
-        d.d.code.set_variable("APU_PULSE_2_ENV", 0x4004);
-        d.d.code.set_variable("APU_PULSE_2_SWEEP", 0x4005);
-        d.d.code.set_variable("APU_PULSE_2_TIMER", 0x4006);
-        d.d.code.set_variable("APU_PULSE_2_LEN", 0x4007);
-        d.d.code.set_variable("APU_TRIANGLE_LEN_CR", 0x4008);
-        d.d.code.set_variable("APU_TRIANGLE_UNUSED", 0x4009);
-        d.d.code.set_variable("APU_TRIANGLE_TIMER", 0x400a);
-        d.d.code.set_variable("APU_TRIANGLE_LOAD", 0x400b);
-        d.d.code.set_variable("APU_NOISE_ENV", 0x400c);
-        d.d.code.set_variable("APU_NOISE_UNUSED", 0x400d);
-        d.d.code.set_variable("APU_NOISE_LP", 0x400e);
-        d.d.code.set_variable("APU_NOISE_LOAD", 0x400f);
-        d.d.code.set_variable("APU_DMC_IL__RRRR", 0x4010);
-        d.d.code.set_variable("APU_DMC_LOAD", 0x4011);
-        d.d.code.set_variable("APU_DMC_SAMPLE_ADDR", 0x4012);
-        d.d.code.set_variable("APU_DMC_SAMPLE_LEN", 0x4013);
-        d.d.code.set_variable("OAM_DMA", 0x4014);
-        d.d.code.set_variable("APU_CH_ENABLE_STATUS", 0x4015);
-        d.d.code.set_variable("APU_ALL_FRAME_COUNTER", 0x4017);
-
+        d.set_variables();
         d.parse_header()?;
         d.parse_chr_rom()?;
         d.disassemble_entry_points()?;
@@ -90,6 +61,227 @@ impl NesDisassembler {
         d.d.code.write(out)?;
 
         return Result::Ok(());
+    }
+
+    fn set_variables(&mut self) {
+        self.d.code.set_variable(
+            0x2000,
+            Variable {
+                name: "PPU_CTRL".to_string(),
+                value: VariableValue::U16(0x2000),
+            },
+        );
+        self.d.code.set_variable(
+            0x2001,
+            Variable {
+                name: "PPU_MASK".to_string(),
+                value: VariableValue::U16(0x2001),
+            },
+        );
+        self.d.code.set_variable(
+            0x2002,
+            Variable {
+                name: "PPU_STATUS".to_string(),
+                value: VariableValue::U16(0x2002),
+            },
+        );
+        self.d.code.set_variable(
+            0x2003,
+            Variable {
+                name: "OAM_ADDR".to_string(),
+                value: VariableValue::U16(0x2003),
+            },
+        );
+        self.d.code.set_variable(
+            0x2004,
+            Variable {
+                name: "OAM_DATA".to_string(),
+                value: VariableValue::U16(0x2004),
+            },
+        );
+        self.d.code.set_variable(
+            0x2005,
+            Variable {
+                name: "PPU_SCROLL".to_string(),
+                value: VariableValue::U16(0x2005),
+            },
+        );
+        self.d.code.set_variable(
+            0x2006,
+            Variable {
+                name: "PPU_ADDR".to_string(),
+                value: VariableValue::U16(0x2006),
+            },
+        );
+        self.d.code.set_variable(
+            0x2007,
+            Variable {
+                name: "PPU_DATA".to_string(),
+                value: VariableValue::U16(0x2007),
+            },
+        );
+
+        self.d.code.set_variable(
+            0x4000,
+            Variable {
+                name: "APU_PULSE_1_ENV".to_string(),
+                value: VariableValue::U16(0x4000),
+            },
+        );
+        self.d.code.set_variable(
+            0x4001,
+            Variable {
+                name: "APU_PULSE_1_SWEEP".to_string(),
+                value: VariableValue::U16(0x4001),
+            },
+        );
+        self.d.code.set_variable(
+            0x4002,
+            Variable {
+                name: "APU_PULSE_1_TIMER".to_string(),
+                value: VariableValue::U16(0x4002),
+            },
+        );
+        self.d.code.set_variable(
+            0x4003,
+            Variable {
+                name: "APU_PULSE_1_LEN".to_string(),
+                value: VariableValue::U16(0x4003),
+            },
+        );
+        self.d.code.set_variable(
+            0x4004,
+            Variable {
+                name: "APU_PULSE_2_ENV".to_string(),
+                value: VariableValue::U16(0x4004),
+            },
+        );
+        self.d.code.set_variable(
+            0x4005,
+            Variable {
+                name: "APU_PULSE_2_SWEEP".to_string(),
+                value: VariableValue::U16(0x4005),
+            },
+        );
+        self.d.code.set_variable(
+            0x4006,
+            Variable {
+                name: "APU_PULSE_2_TIMER".to_string(),
+                value: VariableValue::U16(0x4006),
+            },
+        );
+        self.d.code.set_variable(
+            0x4007,
+            Variable {
+                name: "APU_PULSE_2_LEN".to_string(),
+                value: VariableValue::U16(0x4007),
+            },
+        );
+        self.d.code.set_variable(
+            0x4008,
+            Variable {
+                name: "APU_TRIANGLE_LEN_CR".to_string(),
+                value: VariableValue::U16(0x4008),
+            },
+        );
+        self.d.code.set_variable(
+            0x4009,
+            Variable {
+                name: "APU_TRIANGLE_UNUSED".to_string(),
+                value: VariableValue::U16(0x4009),
+            },
+        );
+        self.d.code.set_variable(
+            0x400a,
+            Variable {
+                name: "APU_TRIANGLE_TIMER".to_string(),
+                value: VariableValue::U16(0x400a),
+            },
+        );
+        self.d.code.set_variable(
+            0x400b,
+            Variable {
+                name: "APU_TRIANGLE_LOAD".to_string(),
+                value: VariableValue::U16(0x400b),
+            },
+        );
+        self.d.code.set_variable(
+            0x400c,
+            Variable {
+                name: "APU_NOISE_ENV".to_string(),
+                value: VariableValue::U16(0x400c),
+            },
+        );
+        self.d.code.set_variable(
+            0x400d,
+            Variable {
+                name: "APU_NOISE_UNUSED".to_string(),
+                value: VariableValue::U16(0x400d),
+            },
+        );
+        self.d.code.set_variable(
+            0x400e,
+            Variable {
+                name: "APU_NOISE_LP".to_string(),
+                value: VariableValue::U16(0x400e),
+            },
+        );
+        self.d.code.set_variable(
+            0x400f,
+            Variable {
+                name: "APU_NOISE_LOAD".to_string(),
+                value: VariableValue::U16(0x400f),
+            },
+        );
+        self.d.code.set_variable(
+            0x4010,
+            Variable {
+                name: "APU_DMC_IL__RRRR".to_string(),
+                value: VariableValue::U16(0x4010),
+            },
+        );
+        self.d.code.set_variable(
+            0x4011,
+            Variable {
+                name: "APU_DMC_LOAD".to_string(),
+                value: VariableValue::U16(0x4011),
+            },
+        );
+        self.d.code.set_variable(
+            0x4012,
+            Variable {
+                name: "APU_DMC_SAMPLE_ADDR".to_string(),
+                value: VariableValue::U16(0x4012),
+            },
+        );
+        self.d.code.set_variable(
+            0x4013,
+            Variable {
+                name: "APU_DMC_SAMPLE_LEN".to_string(),
+                value: VariableValue::U16(0x4013),
+            },
+        );
+        self.d.code.set_variable(
+            0x4014,
+            Variable {
+                name: "OAM_DMA".to_string(),
+                value: VariableValue::U16(0x4014),
+            },
+        );
+        self.d.code.set_variable(
+            0x4015,
+            Variable {
+                name: "APU_CH_ENABLE_STATUS".to_string(),
+                value: VariableValue::U16(0x4015),
+            },
+        );
+        self.d.code.set_variable(
+            0x4017,
+            Variable {
+                name: "APU_ALL_FRAME_COUNTER".to_string(),
+                value: VariableValue::U16(0x4017),
+            },
+        );
     }
 
     fn parse_header(&mut self) -> Result<(), DisassembleError> {
@@ -105,6 +297,7 @@ impl NesDisassembler {
                     AsmCode::DataHexU8(0x1a),
                 ]),
             )?;
+            self.d.code.set_segment(0, "HEADER");
         } else {
             return Result::Err(DisassembleError::ParseError(
                 "invalid nes header".to_string(),
@@ -237,7 +430,8 @@ impl NesDisassembler {
         let chr_rom_start_addr =
             NES_HEADER_LENGTH + ((self.prg_rom_count as usize) * NES_PRG_ROM_PAGE_LENGTH);
         let mut addr = chr_rom_start_addr;
-        for _ in 0..self.chr_rom_count {
+        for chr_rom_index in 0..self.chr_rom_count {
+            let chr_rom_start_addr = addr;
             let chr_rom_end_addr = addr + NES_CHR_ROM_PAGE_LENGTH;
             while addr < chr_rom_end_addr {
                 let mut bytes = Vec::new();
@@ -251,11 +445,16 @@ impl NesDisassembler {
                     Statement {
                         asm_code: AsmCode::DataSeq(bytes),
                         comment: Option::None,
+                        segment: Option::None,
                         label: Option::None,
                     },
                 )?;
                 addr += 16;
             }
+            self.d.code.set_segment(
+                chr_rom_start_addr,
+                format!("CHRROM{}", chr_rom_index).as_str(),
+            );
         }
         return Result::Ok(());
     }
@@ -283,24 +482,28 @@ impl NesDisassembler {
             self.d.disassemble(
                 nmi,
                 "nmi",
-                format!("page_{}", prg_rom_idx).as_str(),
+                format!("prgrom{}", prg_rom_idx).as_str(),
                 &addr_to_offset_fn,
                 &offset_to_addr_fn,
             )?;
             self.d.disassemble(
                 reset,
                 "reset",
-                format!("page_{}", prg_rom_idx).as_str(),
+                format!("prgrom{}", prg_rom_idx).as_str(),
                 &addr_to_offset_fn,
                 &offset_to_addr_fn,
             )?;
             self.d.disassemble(
                 irq,
                 "irq",
-                format!("page_{}", prg_rom_idx).as_str(),
+                format!("prgrom{}", prg_rom_idx).as_str(),
                 &addr_to_offset_fn,
                 &offset_to_addr_fn,
             )?;
+
+            self.d
+                .code
+                .set_segment(offset, format!("PRGROM{}", prg_rom_idx).as_str());
 
             offset += NES_PRG_ROM_PAGE_LENGTH;
         }

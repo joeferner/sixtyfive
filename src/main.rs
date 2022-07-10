@@ -2,7 +2,6 @@ use clap::{Parser, Subcommand};
 use std::{fmt::Debug, path::PathBuf, process};
 
 mod disassemble;
-mod code;
 
 use disassemble::{disassemble, DisassembleOptions};
 
